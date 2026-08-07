@@ -1,0 +1,39 @@
+{
+  "applications": [
+    {
+      "name": "chan-portal",
+      "path": "apps/chan-portal",
+      "frontendPort": 5172,
+      "backendPort": null,
+      "enabled": true
+    },
+    {
+      "name": "bochan",
+      "path": "apps/bochan",
+      "frontendPort": 5173,
+      "backendPort": 8001,
+      "enabled": true
+    },
+    {
+      "name": "malchan",
+      "path": "apps/malchan",
+      "frontendPort": 5174,
+      "backendPort": 8002,
+      "enabled": true
+    },
+    {
+      "name": "cauchan",
+      "path": "apps/cauchan",
+      "frontendPort": 5175,
+      "backendPort": 8003,
+      "enabled": true
+    },
+    {
+      "name": "dchan",
+      "path": "apps/dchan",
+      "frontendPort": 5176,
+      "backendPort": 8004,
+      "enabled": true
+    }
+  ]
+}
