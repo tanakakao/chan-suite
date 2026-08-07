@@ -1,38 +1,30 @@
 [CmdletBinding()]
-param()
+param(
+    [ValidateSet('Local', 'Intranet')][string]$Profile = 'Local',
+    [string]$ServerHost
+)
 
 $ErrorActionPreference = 'Stop'
 $suiteRoot = Split-Path -Parent $PSScriptRoot
-$configPath = Join-Path $suiteRoot 'config/apps.json'
-
-function Test-PortListening {
-    <#
-    Tests whether a local TCP port is listening.
-
-    Args:
-        Port: TCP port number to inspect.
-
-    Returns:
-        Boolean indicating whether a listener exists.
-    #>
-    param([Parameter(Mandatory = $true)][int]$Port)
-
-    $listeners = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().GetActiveTcpListeners()
-    return ($null -ne ($listeners | Where-Object { $_.Port -eq $Port } | Select-Object -First 1))
-}
+. (Join-Path $PSScriptRoot 'common.ps1')
 
 try {
-    $config = Get-Content -LiteralPath $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $configuration = Get-ChanSuiteConfiguration -SuiteRoot $suiteRoot
+    $resolvedProfile = Resolve-ChanSuiteProfile -Profiles $configuration.Profiles -Profile $Profile -ServerHost $ServerHost
 }
 catch {
-    Write-Error ("Failed to read configuration '{0}': {1}" -f $configPath, $_.Exception.Message)
+    Write-Host ("[ERROR] {0}" -f $_.Exception.Message)
     exit 1
 }
 
 Write-Host 'CHAN SUITE STATUS'
 Write-Host ''
+Write-Host ("Profile    : {0}" -f $resolvedProfile.Profile)
+Write-Host ("Bind host  : {0}" -f $resolvedProfile.BindHost)
+Write-Host ("Public host: {0}" -f $resolvedProfile.PublicHost)
+Write-Host ''
 
-foreach ($application in @($config.applications)) {
+foreach ($application in @($configuration.Applications)) {
     try {
         $applicationPath = Join-Path $suiteRoot $application.path
         Write-Host $application.name
@@ -43,13 +35,21 @@ foreach ($application in @($config.applications)) {
         }
 
         Write-Host '  directory : OK'
-        if ($null -ne $application.frontendPort) {
-            $state = if (Test-PortListening -Port $application.frontendPort) { 'RUNNING' } else { 'STOPPED' }
-            Write-Host ("  frontend  : {0} {1}" -f $application.frontendPort, $state)
-        }
-        if ($null -ne $application.backendPort) {
-            $state = if (Test-PortListening -Port $application.backendPort) { 'RUNNING' } else { 'STOPPED' }
-            Write-Host ("  backend   : {0} {1}" -f $application.backendPort, $state)
+        $endpoints = @(
+            [PSCustomObject]@{ Name = 'frontend'; Port = $application.frontendPort }
+            [PSCustomObject]@{ Name = 'backend'; Port = $application.backendPort }
+        )
+        foreach ($endpoint in $endpoints) {
+            if ($null -eq $endpoint.Port) {
+                continue
+            }
+            $isRunning = Test-PortListening -Port $endpoint.Port
+            $state = if ($isRunning) { 'RUNNING' } else { 'STOPPED' }
+            Write-Host ("  {0,-10}: {1} {2}" -f $endpoint.Name, $endpoint.Port, $state)
+            Write-Host ("  {0} url : {1}" -f $endpoint.Name, (Get-ChanSuiteUrl -PublicHost $resolvedProfile.PublicHost -Port $endpoint.Port))
+            if ($Profile -eq 'Intranet' -and $isRunning -and (Test-PortLoopbackOnly -Port $endpoint.Port)) {
+                Write-Host ("  [WARN] {0} is listening only on loopback; it may not be reachable from other PCs." -f $endpoint.Name)
+            }
         }
         if ($application.enabled -ne $true) {
             Write-Host '  enabled   : false'
