@@ -1,0 +1,12 @@
+apps/*
+!apps/.gitkeep
+
+logs/*
+!logs/.gitkeep
+
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.pyc
+__pycache__/
+node_modules/
