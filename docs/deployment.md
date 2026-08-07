@@ -1,12 +1,30 @@
-# 社内 Windows PC／サーバーへの配置
+# 開発者 PC／社内 Windows サーバーへの配置
 
 ## 前提方針
 
-- chan-suite と各アプリは独立した Git リポジトリとして管理します。
-- Python 仮想環境、Node.js 依存関係、環境変数は各アプリ内で個別に管理します。複数アプリで Python 仮想環境を共有しません。
-- 本手順は Docker、Reverse Proxy、Windows Service、自動更新を使用しません。
+- chan-suite と各アプリは独立した Git repository として管理します。
+- 同じアプリソースを clone し、開発者 PC と社内サーバーでは実行 profile だけを変えます。
+- chan-suite は各アプリの `.env`、Vite／FastAPI 設定、起動スクリプトを書き換えません。
+- Python 仮想環境と Node.js 依存関係は各アプリ内で個別に管理します。
+- Docker、Reverse Proxy、Windows Service、自動更新は使用しません。
 
-## 配置手順
+## 開発者 PC
+
+各アプリ repository 単独で従来どおり開発・起動し、`127.0.0.1` での待受を基本とします。
+
+```powershell
+Set-Location .\apps\bochan
+<bochan 独自の既存起動方法>
+```
+
+一括ローカル起動が必要な場合だけ repository root から実行します。profile 省略時も Local です。
+
+```powershell
+.\deploy\start_all.ps1 -Profile Local
+.\deploy\status.ps1 -Profile Local
+```
+
+## 社内サーバー
 
 1. 配置先で chan-suite を clone します。
 
@@ -15,7 +33,7 @@
    Set-Location .\chan-suite
    ```
 
-2. `apps/` 配下へ各アプリを clone します。
+2. 各 repository を `chan-suite/apps/` 配下へ clone します。
 
    ```powershell
    Set-Location .\apps
@@ -27,21 +45,37 @@
    Set-Location ..
    ```
 
-3. 各アプリの README に従い、Python／Node.js の依存関係と環境変数を個別にセットアップします。自動インストールは行われません。
-4. `.\deploy\status.ps1` を実行し、ディレクトリとポートの状態を確認します。
-5. 各アプリのディレクトリへ移動し、それぞれの従来の方法で単独起動できることを確認してから停止します。
-6. 各アプリ直下に対応する起動スクリプトがあることを確認し、`.\deploy\start_all.ps1` で一括起動します。未配置のアプリや起動スクリプトのないアプリは安全にスキップされます。
-7. 社内 LAN へ公開する場合は、各アプリの待受設定を必要に応じて `0.0.0.0` にし、Windows Defender Firewall で必要な Frontend ポート（5172～5176）の受信だけを許可します。Backend API ポートの直接公開が必要かは個別に判断してください。
-8. 別の社内 PC から `http://<server-ip>:5172` へアクセスし、chan-portal とリンク先を確認します。
+3. 各アプリの README に従い、依存関係を個別にセットアップします。
+4. 各アプリを従来の方法で単独起動できることを確認して停止します。
+5. 利用者が名前解決・到達できるホストを指定して一括起動します。
 
-## 公開時の注意
+   ```powershell
+   .\deploy\start_all.ps1 `
+       -Profile Intranet `
+       -ServerHost <server-host>
+   ```
 
-`0.0.0.0` は全インターフェースで待ち受けるためのアドレスであり、ブラウザへ入力する URL ではありません。利用者は `http://<server-ip>:5172` または `http://<server-hostname>:5172` を使用します。
+   `-ServerHost` を省略する場合は、先に `$env:CHAN_SERVER_HOST = '<server-host>'` を設定します。parameter が環境変数より優先されます。両方なければ安全にエラー終了します。
 
-chan-portal 内の各アプリ URL が `127.0.0.1` のままだと、閲覧者自身の PC を参照してしまいます。chan-portal リポジトリ側の設定を、実際のサーバー IP またはホスト名（bochan は 5173、malchan は 5174、cauchan は 5175、dchan は 5176）へ変更してください。chan-suite からアプリのソースは変更しません。
+6. 状態と URL を確認します。
+
+   ```powershell
+   .\deploy\status.ps1 -Profile Intranet -ServerHost <server-host>
+   ```
+
+7. Windows Defender Firewall では必要な Frontend ポート（5172～5176）だけを許可します。Backend API ポートを直接公開するかは個別に判断します。
+8. 別の社内 PC から `http://<server-host>:5172` へアクセスします。
+
+## Profile と公開時の注意
+
+`config/profiles.json` は Local の bind/public host を `127.0.0.1`、Intranet の bind host を `0.0.0.0` と定義します。Intranet の public host は環境依存なので repository に保存しません。`0.0.0.0` はブラウザへ入力する URL ではありません。
+
+chan-suite は `CHAN_BIND_HOST` などを子プロセスへ渡すだけです。各アプリの起動スクリプトと Vite／FastAPI がその値を利用するまでは、Intranet profile だけで LAN 公開は完結しません。各アプリの対応状況を確認してください。chan-portal のリンク URL は `VITE_<APP>_URL` として起動時環境に渡されますが、chan-portal 側がそれらを参照する必要があります。
+
+Intranet 状態確認で listener が loopback のみと判定できた場合は警告します。Firewall は組織の方針に従い、必要最小限の送信元とポートに限定してください。
 
 ## 停止とログ
 
-初期版の `.\deploy\stop_all.ps1` は安全性を優先し、プロセスを終了しません。起動したターミナル、または各アプリが提供する停止手順を使用してください。ポート番号だけを根拠にプロセスを kill しないでください。
+`.\deploy\stop_all.ps1` は安全性を優先し、プロセスを終了しません。起動したターミナル、または各アプリが提供する停止手順を使用してください。ポート番号だけを根拠にプロセスを kill しません。
 
-起動スクリプトの標準出力と標準エラーは `logs/` に保存され、Git には登録されません。障害時はアプリ自身のログと合わせて確認します。
+起動スクリプトの標準出力と標準エラーは `logs/` に保存され、Git には登録されません。

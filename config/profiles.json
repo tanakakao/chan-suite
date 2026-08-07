@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "local": {
+      "bindHost": "127.0.0.1",
+      "publicHost": "127.0.0.1"
+    },
+    "intranet": {
+      "bindHost": "0.0.0.0",
+      "publicHost": null
+    }
+  }
+}
