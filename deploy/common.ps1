@@ -1,3 +1,39 @@
+function Assert-UniqueApplicationPorts {
+    <#
+    Validates that enabled applications do not reuse frontend/backend ports.
+
+    Args:
+        Applications: Application configuration objects loaded from apps.json.
+
+    Returns:
+        None. Throws when a configured port is invalid or duplicated.
+    #>
+    param([Parameter(Mandatory = $true)]$Applications)
+
+    $ownersByPort = @{}
+    foreach ($application in @($Applications | Where-Object { $_.enabled -eq $true })) {
+        $endpoints = @(
+            [PSCustomObject]@{ Name = 'frontend'; Port = $application.frontendPort }
+            [PSCustomObject]@{ Name = 'backend'; Port = $application.backendPort }
+        )
+        foreach ($endpoint in $endpoints) {
+            if ($null -eq $endpoint.Port) {
+                continue
+            }
+
+            $port = [int]$endpoint.Port
+            if ($port -lt 1 -or $port -gt 65535) {
+                throw ("Invalid port {0} for {1} {2}." -f $port, $application.name, $endpoint.Name)
+            }
+
+            if ($ownersByPort.ContainsKey($port)) {
+                throw ("Duplicate port {0}: {1} conflicts with {2} {3}." -f $port, $ownersByPort[$port], $application.name, $endpoint.Name)
+            }
+            $ownersByPort[$port] = ("{0} {1}" -f $application.name, $endpoint.Name)
+        }
+    }
+}
+
 function Get-ChanSuiteConfiguration {
     <#
     Loads application and execution-profile configuration.
@@ -19,9 +55,13 @@ function Get-ChanSuiteConfiguration {
         throw "Configuration file not found: $profilesPath"
     }
 
+    $applications = (Get-Content -LiteralPath $appsPath -Raw -Encoding UTF8 | ConvertFrom-Json).applications
+    $profiles = (Get-Content -LiteralPath $profilesPath -Raw -Encoding UTF8 | ConvertFrom-Json).profiles
+    Assert-UniqueApplicationPorts -Applications $applications
+
     return [PSCustomObject]@{
-        Applications = (Get-Content -LiteralPath $appsPath -Raw -Encoding UTF8 | ConvertFrom-Json).applications
-        Profiles = (Get-Content -LiteralPath $profilesPath -Raw -Encoding UTF8 | ConvertFrom-Json).profiles
+        Applications = $applications
+        Profiles = $profiles
     }
 }
 
