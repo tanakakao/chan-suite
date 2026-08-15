@@ -97,23 +97,6 @@ start_frontend() {
   start_bg "$name" "$working_dir" "$@" pnpm run dev -- --host "$BIND_HOST" --port "$port" --strictPort
 }
 
-start_backend() {
-  name=$1
-  port=$2
-  app_dir=$3
-  shift 3
-  if port_in_use "$port"; then
-    echo "[RUNNING] $name: port $port is already in use."
-    return
-  fi
-  if ! app_python=$(find_venv_python "$app_dir"); then
-    echo "[ERROR] $name: .venv Python not found. Run setup_all.sh first."
-    FAILED=1
-    return
-  fi
-  start_bg "$name" "$app_dir" "$@" "$app_python" -m uvicorn
-}
-
 PORTAL="$APPS_DIR/chan-portal"
 BOCHAN="$APPS_DIR/bochan"
 MALCHAN="$APPS_DIR/malchan"
@@ -132,11 +115,18 @@ start_frontend chan-portal 5172 "$PORTAL" env \
   "VITE_CAUCHAN_URL=http://$PUBLIC_HOST:5175" \
   "VITE_DCHAN_URL=http://$PUBLIC_HOST:5176"
 
-start_backend bochan-backend 8001 "$BOCHAN" env \
-  "$COMMON_PROFILE" "$COMMON_BIND" "$COMMON_PUBLIC" \
-  "CHAN_FRONTEND_PORT=5173" "CHAN_BACKEND_PORT=8001" \
-  "PYTHONUNBUFFERED=1" \
-  "$(find_venv_python "$BOCHAN" 2>/dev/null || printf '%s' true)" -m uvicorn bochan.serving.webapp.app:app --host "$BIND_HOST" --port 8001
+if ! bochan_python=$(find_venv_python "$BOCHAN" 2>/dev/null); then
+  echo "[ERROR] bochan-backend: .venv Python not found. Run setup_all.sh first."
+  FAILED=1
+elif port_in_use 8001; then
+  echo "[RUNNING] bochan-backend: port 8001 is already in use."
+else
+  start_bg bochan-backend "$BOCHAN" env \
+    "$COMMON_PROFILE" "$COMMON_BIND" "$COMMON_PUBLIC" \
+    "CHAN_FRONTEND_PORT=5173" "CHAN_BACKEND_PORT=8001" \
+    PYTHONUNBUFFERED=1 \
+    "$bochan_python" -m uvicorn bochan.serving.webapp.app:app --host "$BIND_HOST" --port 8001
+fi
 start_frontend bochan-frontend 5173 "$BOCHAN/web" env \
   "$COMMON_PROFILE" "$COMMON_BIND" "$COMMON_PUBLIC" \
   "CHAN_FRONTEND_PORT=5173" "CHAN_BACKEND_PORT=8001" \
