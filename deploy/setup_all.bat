@@ -6,6 +6,8 @@ set "APPS_DIR=%SUITE_ROOT%\apps"
 set "FAILED=0"
 set "USE_UV=0"
 set "BASE_PYTHON="
+set "PYTHON_VERSION=%CHAN_PYTHON_VERSION%"
+if not defined PYTHON_VERSION set "PYTHON_VERSION=3.12"
 
 where pnpm >nul 2>&1
 if errorlevel 1 (
@@ -18,7 +20,7 @@ where uv >nul 2>&1
 if not errorlevel 1 set "USE_UV=1"
 if "%USE_UV%"=="0" (
     where py >nul 2>&1
-    if not errorlevel 1 set "BASE_PYTHON=py -3"
+    if not errorlevel 1 set "BASE_PYTHON=py -%PYTHON_VERSION%"
 )
 if "%USE_UV%"=="0" if not defined BASE_PYTHON (
     where python >nul 2>&1
@@ -60,14 +62,14 @@ if not exist "%APP_DIR%\pyproject.toml" (
 
 pushd "%APP_DIR%" >nul
 if not exist ".venv\Scripts\python.exe" (
-    echo [SETUP] %APP% Python virtual environment
+    echo [SETUP] %APP% Python %PYTHON_VERSION% virtual environment
     if "%USE_UV%"=="1" (
-        uv venv .venv
+        uv venv --python "%PYTHON_VERSION%" .venv
     ) else (
         call %BASE_PYTHON% -m venv .venv
     )
     if errorlevel 1 (
-        echo [ERROR] %APP%: failed to create .venv.
+        echo [ERROR] %APP%: failed to create .venv with Python %PYTHON_VERSION%.
         set "FAILED=1"
         popd >nul
         exit /b 0
