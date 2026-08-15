@@ -27,23 +27,51 @@ chan-suite/
 ├─ apps/               ← 各アプリの独立した Git repository（Git 管理外）
 ├─ config/apps.json    ← アプリ固有のパス、ポート、有効／無効
 ├─ config/profiles.json← Local／Intranet の bind/public host
-├─ deploy/             ← 一括管理 PowerShell スクリプト
+├─ deploy/             ← clone・一括起動・状態確認スクリプト
 └─ logs/               ← 実行時ログ（Git 管理外）
 ```
 
 ## アプリの配置
 
-chan-suite を clone 後、各リポジトリを手動で `apps/` に配置します。自動 clone、pull、依存関係のインストールは行いません。
+chan-suite を clone 後、各リポジトリを `apps/` にまとめて clone できます。
 
-```powershell
-Set-Location .\apps
-git clone <chan-portal-repository-url> chan-portal
-git clone <bochan-repository-url> bochan
-git clone <malchan-repository-url> malchan
-git clone <cauchan-repository-url> cauchan
-git clone <dchan-repository-url> dchan
-Set-Location ..
+Windows:
+
+```cmd
+.\deploy\clone_all.bat
 ```
+
+macOS / Linux / Git Bash:
+
+```bash
+sh ./deploy/clone_all.sh
+```
+
+既定では次のリポジトリを `https://github.com/tanakakao/` から clone します。
+
+```text
+apps/
+├─ chan-portal/
+├─ bochan/
+├─ malchan/
+├─ cauchan/
+└─ dchan/
+```
+
+既に `.git` を持つディレクトリはスキップします。同名ディレクトリが存在しても Git repository でない場合は上書きせず、エラーとして報告します。clone に失敗した repository があっても残りを処理し、最後に非ゼロ終了コードを返します。
+
+fork や別 owner から clone する場合は `CHAN_GITHUB_OWNER` を指定できます。
+
+```cmd
+set CHAN_GITHUB_OWNER=your-account
+.\deploy\clone_all.bat
+```
+
+```bash
+CHAN_GITHUB_OWNER=your-account sh ./deploy/clone_all.sh
+```
+
+clone スクリプトは `git pull`、依存関係のインストール、アプリ起動を行いません。既存 repository の更新やセットアップは各アプリ側で個別に管理します。
 
 ## Local development
 
