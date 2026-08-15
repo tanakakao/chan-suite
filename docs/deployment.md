@@ -29,21 +29,38 @@ Set-Location .\apps\bochan
 1. 配置先で chan-suite を clone します。
 
    ```powershell
-   git clone <chan-suite-repository-url> chan-suite
+   git clone https://github.com/tanakakao/chan-suite.git chan-suite
    Set-Location .\chan-suite
    ```
 
-2. 各 repository を `chan-suite/apps/` 配下へ clone します。
+2. 各 repository を `chan-suite/apps/` 配下へまとめて clone します。
 
-   ```powershell
-   Set-Location .\apps
-   git clone <chan-portal-repository-url> chan-portal
-   git clone <bochan-repository-url> bochan
-   git clone <malchan-repository-url> malchan
-   git clone <cauchan-repository-url> cauchan
-   git clone <dchan-repository-url> dchan
-   Set-Location ..
+   Windows:
+
+   ```cmd
+   .\deploy\clone_all.bat
    ```
+
+   macOS / Linux / Git Bash:
+
+   ```bash
+   sh ./deploy/clone_all.sh
+   ```
+
+   既定では `tanakakao/chan-portal`、`tanakakao/bochan`、`tanakakao/malchan`、`tanakakao/cauchan`、`tanakakao/dchan` を clone します。既に Git repository として存在するディレクトリはスキップし、非 Git の同名ディレクトリは上書きしません。
+
+   別 owner の repository を使う場合は `CHAN_GITHUB_OWNER` を設定します。
+
+   ```cmd
+   set CHAN_GITHUB_OWNER=your-account
+   .\deploy\clone_all.bat
+   ```
+
+   ```bash
+   CHAN_GITHUB_OWNER=your-account sh ./deploy/clone_all.sh
+   ```
+
+   clone スクリプトは既存 repository の `git pull` や依存関係のインストールを行いません。
 
 3. 各アプリの README に従い、依存関係を個別にセットアップします。
 4. 各アプリを従来の方法で単独起動できることを確認して停止します。
