@@ -1,6 +1,6 @@
 # chan-suite
 
-`chan-suite` は、chan シリーズの独立した Web アプリを同じ PC／社内サーバーへ配置し、一括起動や状態確認を行うデプロイ／ランチャーです。各アプリは monorepo、Git submodule、subtree にせず、独立した Git repository のまま維持します。
+`chan-suite` は、chan シリーズの独立した Web アプリを同じ PC／社内サーバーへ配置し、一括更新・セットアップ・起動・状態確認を行うデプロイ／ランチャーです。各アプリは monorepo、Git submodule、subtree にせず、独立した Git repository のまま維持します。
 
 ## リポジトリと実行環境の関係
 
@@ -27,23 +27,203 @@ chan-suite/
 ├─ apps/               ← 各アプリの独立した Git repository（Git 管理外）
 ├─ config/apps.json    ← アプリ固有のパス、ポート、有効／無効
 ├─ config/profiles.json← Local／Intranet の bind/public host
-├─ deploy/             ← 一括管理 PowerShell スクリプト
+├─ deploy/             ← clone・update・setup・start・status 用スクリプト
 └─ logs/               ← 実行時ログ（Git 管理外）
 ```
 
-## アプリの配置
+## 最短セットアップ
 
-chan-suite を clone 後、各リポジトリを手動で `apps/` に配置します。自動 clone、pull、依存関係のインストールは行いません。
+### Windows
+
+```cmd
+git clone https://github.com/tanakakao/chan-suite.git
+cd chan-suite
+
+.\deploy\clone_all.bat
+.\deploy\setup_all.bat
+.\deploy\start_all.bat
+```
+
+### macOS / Linux / Git Bash
+
+```bash
+git clone https://github.com/tanakakao/chan-suite.git
+cd chan-suite
+
+sh ./deploy/clone_all.sh
+sh ./deploy/setup_all.sh
+sh ./deploy/start_all.sh
+```
+
+通常の Local 起動では、chan-portal が `http://127.0.0.1:5172`、各アプリが 5173～5176 で起動します。
+
+## 1. アプリをまとめて clone
+
+各リポジトリを `apps/` にまとめて clone します。
+
+Windows:
+
+```cmd
+.\deploy\clone_all.bat
+```
+
+macOS / Linux / Git Bash:
+
+```bash
+sh ./deploy/clone_all.sh
+```
+
+既定では次のリポジトリを `https://github.com/tanakakao/` から clone します。
+
+```text
+apps/
+├─ chan-portal/
+├─ bochan/
+├─ malchan/
+├─ cauchan/
+└─ dchan/
+```
+
+既に `.git` を持つディレクトリはスキップします。同名ディレクトリが存在しても Git repository でない場合は上書きせず、エラーとして報告します。clone に失敗した repository があっても残りを処理し、最後に非ゼロ終了コードを返します。
+
+fork や別 owner から clone する場合は `CHAN_GITHUB_OWNER` を指定できます。
+
+```cmd
+set CHAN_GITHUB_OWNER=your-account
+.\deploy\clone_all.bat
+```
+
+```bash
+CHAN_GITHUB_OWNER=your-account sh ./deploy/clone_all.sh
+```
+
+## 2. 全 repository を安全に update
+
+Windows:
+
+```cmd
+.\deploy\update_all.bat
+```
+
+macOS / Linux / Git Bash:
+
+```bash
+sh ./deploy/update_all.sh
+```
+
+`update_all` は各 repository の現在の branch に対して `git pull --ff-only` だけを実行します。次の場合は勝手に変更せず、その repository をスキップして全体をエラー終了します。
+
+- working tree に未コミット変更がある
+- detached HEAD になっている
+- 同名ディレクトリが Git repository ではない
+- fast-forward だけでは更新できない
+
+したがって、ローカルの開発内容を上書きする目的のスクリプトではありません。
+
+## 3. Python / pnpm 依存関係をまとめて setup
+
+Windows:
+
+```cmd
+.\deploy\setup_all.bat
+```
+
+macOS / Linux / Git Bash:
+
+```bash
+sh ./deploy/setup_all.sh
+```
+
+Python backend を持つ bochan / malchan / cauchan / dchan には repository ごとの `.venv` を作成し、Frontend は各 `pnpm-lock.yaml` に対して `pnpm install --frozen-lockfile` を実行します。`uv` が利用可能な場合は優先して使用します。
+
+Python は4アプリで共通して利用できる **3.12** を既定にしています。変更する場合は `CHAN_PYTHON_VERSION` を指定できます。
+
+```cmd
+set CHAN_PYTHON_VERSION=3.11
+.\deploy\setup_all.bat
+```
+
+```bash
+CHAN_PYTHON_VERSION=3.11 sh ./deploy/setup_all.sh
+```
+
+Python extras は Web 実行に必要な範囲をセットアップします。
+
+- bochan: `.[web]`
+- malchan: `.[web,models,inverse,visualization]`
+- cauchan: `.`
+- dchan: `.`
+- chan-portal: Python backend なし
+
+## 4. 全アプリを起動
+
+### Windows
+
+最も簡単な起動方法は次です。
+
+```cmd
+.\deploy\start_all.bat
+```
+
+`start_all.bat` は既存の `start_all.ps1` を Local profile で呼び出すラッパーです。PowerShellを直接使うこともできます。
 
 ```powershell
-Set-Location .\apps
-git clone <chan-portal-repository-url> chan-portal
-git clone <bochan-repository-url> bochan
-git clone <malchan-repository-url> malchan
-git clone <cauchan-repository-url> cauchan
-git clone <dchan-repository-url> dchan
-Set-Location ..
+.\deploy\start_all.ps1 -Profile Local
 ```
+
+Intranet profile は次のように指定します。
+
+```cmd
+.\deploy\start_all.bat Intranet chan-server
+```
+
+```powershell
+.\deploy\start_all.ps1 -Profile Intranet -ServerHost chan-server
+```
+
+### macOS / Linux / Git Bash
+
+```bash
+sh ./deploy/start_all.sh
+```
+
+shell 版は各 repository の `.venv` と pnpm frontend を直接起動し、`config/apps.json` のポートを参照します。標準出力・標準エラーと PID は `logs/` に保存します。
+
+Intranet profile:
+
+```bash
+sh ./deploy/start_all.sh Intranet chan-server
+```
+
+または `CHAN_SERVER_HOST` を利用できます。
+
+```bash
+CHAN_SERVER_HOST=chan-server sh ./deploy/start_all.sh Intranet
+```
+
+Local の bind/public host は `127.0.0.1`、Intranet の bind host は `0.0.0.0` です。`0.0.0.0` は待受用アドレスであり、ブラウザへ入力する URL ではありません。
+
+## 日常の更新フロー
+
+初回clone後は、基本的に次の3操作で更新できます。
+
+Windows:
+
+```cmd
+.\deploy\update_all.bat
+.\deploy\setup_all.bat
+.\deploy\start_all.bat
+```
+
+macOS / Linux / Git Bash:
+
+```bash
+sh ./deploy/update_all.sh
+sh ./deploy/setup_all.sh
+sh ./deploy/start_all.sh
+```
+
+`setup_all` は lockfile に従うため、依存関係が変わっていなければ再実行しても問題ありません。
 
 ## Local development
 
@@ -51,33 +231,12 @@ Set-Location ..
 
 ```powershell
 Set-Location .\apps\bochan
-<bochan 独自の既存起動方法>
+.\start_web.bat
 ```
 
-chan-suite から一括ローカル起動・確認する場合は次を実行します。`-Profile` 省略時も、安全な `Local` です。
+chan-suite は一括管理用であり、各 repository の単独開発を置き換えるものではありません。
 
-```powershell
-.\deploy\start_all.ps1 -Profile Local
-.\deploy\status.ps1 -Profile Local
-```
-
-Local の bind host と public host はともに `127.0.0.1` です。
-
-## Intranet deployment
-
-社内 LAN へ明示的に公開する実行コンテキストは次のように指定します。
-
-```powershell
-.\deploy\start_all.ps1 `
-    -Profile Intranet `
-    -ServerHost chan-server
-
-.\deploy\status.ps1 -Profile Intranet -ServerHost chan-server
-```
-
-`-ServerHost` は利用者が接続できるホスト名または IP です。省略時は `CHAN_SERVER_HOST` 環境変数を参照し、どちらもなければエラーになります。`0.0.0.0` は待受用でありアクセス URL ではありません。利用者は `http://chan-server:5172` から chan-portal へアクセスします。実環境のホスト名や IP は repository に固定しません。
-
-## 起動仕様と環境変数
+## Windows PowerShell 起動仕様
 
 `start_all.ps1` は `enabled: true` かつディレクトリが存在するアプリだけを扱います。設定ポートのいずれかが LISTEN 中なら二重起動を避けてスキップします。全設定ポートが空いているとき、アプリ直下から次の順で最初のスクリプトを起動します。
 
@@ -88,8 +247,6 @@ Local の bind host と public host はともに `127.0.0.1` です。
 5. `start_web.ps1`
 6. `start.ps1`
 
-該当ファイルがなければ警告してスキップし、`npm`、`python`、`uvicorn` などを推測実行しません。標準出力は `logs/<name>.log`、標準エラーは `logs/<name>.error.log` に保存します。
-
 起動時だけ子プロセスへ次の実行コンテキストを渡し、呼び出し元 PowerShell の値は復元します。
 
 - `CHAN_SUITE_PROFILE`
@@ -98,34 +255,24 @@ Local の bind host と public host はともに `127.0.0.1` です。
 - `CHAN_FRONTEND_PORT`
 - `CHAN_BACKEND_PORT`
 
-chan-portal には加えて、`apps.json` の各 frontend port と resolved public host から作った `VITE_BOCHAN_URL`、`VITE_MALCHAN_URL`、`VITE_CAUCHAN_URL`、`VITE_DCHAN_URL` を、その子プロセス起動時だけ渡します。各 repository の `.env` や設定ファイルは変更せず、一時ファイルも作りません。
+chan-portal には加えて、各 frontend port と resolved public host から作った `VITE_BOCHAN_URL`、`VITE_MALCHAN_URL`、`VITE_CAUCHAN_URL`、`VITE_DCHAN_URL` を渡します。
 
-### 各アプリ側で必要な対応
-
-chan-suite は実行コンテキストを提供しますが、実際の bind を強制しません。
-
-```text
-chan-suite
-    ↓ environment
-CHAN_BIND_HOST=0.0.0.0
-    ↓
-bochan startup script
-    ↓
-Vite / FastAPI
-```
-
-各アプリの起動スクリプトや Vite／FastAPI 設定が `CHAN_BIND_HOST` を参照しなければ、Intranet 指定でも実際の待受アドレスは変わりません。未対応アプリは後続タスクで個別対応が必要です。LISTEN 中のアドレスを取得でき、Intranet で loopback のみと判定された場合、start/status は到達できない可能性を警告します。
+各アプリのWindows起動スクリプトが `CHAN_BIND_HOST` 等をまだ参照していない場合、Intranet profileでもそのアプリ自身の既定bind hostが優先される場合があります。Local profileには影響しません。shell版 `start_all.sh` はVite/FastAPIへbind hostを直接指定します。
 
 ## 状態確認・停止
 
-`status.ps1` は profile、bind/public host、各ポートの状態と利用者向け URL を表示します。
+Windowsでは `status.ps1` で profile、bind/public host、各ポートの状態と利用者向け URL を確認できます。
 
 ```powershell
 .\deploy\status.ps1
+.\deploy\status.ps1 -Profile Intranet -ServerHost chan-server
+```
+
+```powershell
 .\deploy\stop_all.ps1
 ```
 
-`stop_all.ps1` は確実なプロセス所有権を検証できないため何も kill しません。各アプリ固有の停止方法を案内し、ポートだけを根拠に無関係なプロセスを終了しません。
+`stop_all.ps1` は安全性を優先し、ポート番号だけを根拠に無関係なプロセスを kill しません。shell版 `start_all.sh` は起動PIDを `logs/*.pid` に記録しますが、現時点では自動killには使用しません。
 
 ## 初期ポート
 
@@ -137,4 +284,4 @@ Vite / FastAPI
 | cauchan | 5175 | 8003 |
 | dchan | 5176 | 8004 |
 
-実行ポリシーで拒否される環境では、組織のセキュリティ方針を確認したうえで `powershell.exe -ExecutionPolicy Bypass -File .\deploy\status.ps1` のように実行してください。詳しい配置手順は [docs/deployment.md](docs/deployment.md) を参照してください。
+実際の値は `config/apps.json` を正とします。詳しい配置手順は [docs/deployment.md](docs/deployment.md) を参照してください。

@@ -1,81 +1,216 @@
-# 開発者 PC／社内 Windows サーバーへの配置
+# 開発者 PC／社内サーバーへの配置
 
 ## 前提方針
 
 - chan-suite と各アプリは独立した Git repository として管理します。
 - 同じアプリソースを clone し、開発者 PC と社内サーバーでは実行 profile だけを変えます。
-- chan-suite は各アプリの `.env`、Vite／FastAPI 設定、起動スクリプトを書き換えません。
+- chan-suite は各アプリの `.env` やソースコードを書き換えません。
 - Python 仮想環境と Node.js 依存関係は各アプリ内で個別に管理します。
 - Docker、Reverse Proxy、Windows Service、自動更新は使用しません。
 
-## 開発者 PC
+## 推奨ライフサイクル
 
-各アプリ repository 単独で従来どおり開発・起動し、`127.0.0.1` での待受を基本とします。
+```text
+clone_all
+   ↓
+setup_all
+   ↓
+start_all
 
-```powershell
-Set-Location .\apps\bochan
-<bochan 独自の既存起動方法>
+以後:
+update_all
+   ↓
+setup_all
+   ↓
+start_all
 ```
 
-一括ローカル起動が必要な場合だけ repository root から実行します。profile 省略時も Local です。
+`clone`、`update`、`setup`、`start` を別スクリプトに分離し、更新時に勝手な依存変更や起動を行わない設計です。
+
+## 1. chan-suite を clone
+
+```powershell
+git clone https://github.com/tanakakao/chan-suite.git chan-suite
+Set-Location .\chan-suite
+```
+
+## 2. 各アプリを一括 clone
+
+Windows:
+
+```cmd
+.\deploy\clone_all.bat
+```
+
+macOS / Linux / Git Bash:
+
+```bash
+sh ./deploy/clone_all.sh
+```
+
+既定では `tanakakao/chan-portal`、`tanakakao/bochan`、`tanakakao/malchan`、`tanakakao/cauchan`、`tanakakao/dchan` を `apps/` 配下へ clone します。既に Git repository として存在するディレクトリはスキップし、非 Git の同名ディレクトリは上書きしません。
+
+別 owner の repository を使う場合:
+
+```cmd
+set CHAN_GITHUB_OWNER=your-account
+.\deploy\clone_all.bat
+```
+
+```bash
+CHAN_GITHUB_OWNER=your-account sh ./deploy/clone_all.sh
+```
+
+## 3. 依存関係を一括 setup
+
+Windows:
+
+```cmd
+.\deploy\setup_all.bat
+```
+
+macOS / Linux / Git Bash:
+
+```bash
+sh ./deploy/setup_all.sh
+```
+
+Python backend は各 repository の `.venv` にセットアップします。`uv` が利用できる場合は優先し、既定の Python は4アプリで共通利用できる 3.12 です。
+
+```cmd
+set CHAN_PYTHON_VERSION=3.11
+.\deploy\setup_all.bat
+```
+
+```bash
+CHAN_PYTHON_VERSION=3.11 sh ./deploy/setup_all.sh
+```
+
+Frontend は各 repository の pnpm lockfileを使用します。
+
+```text
+chan-portal      ./pnpm-lock.yaml
+bochan           web/pnpm-lock.yaml
+malchan          frontend/pnpm-lock.yaml
+cauchan          web/pnpm-lock.yaml
+dchan            frontend/pnpm-lock.yaml
+```
+
+すべて `pnpm install --frozen-lockfile` で導入し、lockfileがない場合は暗黙に作成せずエラーにします。
+
+Python側は次の範囲を導入します。
+
+```text
+bochan    .[web]
+malchan   .[web,models,inverse,visualization]
+cauchan   .
+dchan     .
+```
+
+## 4. 全アプリを起動
+
+### Windows / Local
+
+```cmd
+.\deploy\start_all.bat
+```
+
+`start_all.bat` は既存のPowerShellランチャーを呼び出します。
 
 ```powershell
 .\deploy\start_all.ps1 -Profile Local
-.\deploy\status.ps1 -Profile Local
 ```
 
-## 社内サーバー
+### Windows / Intranet
 
-1. 配置先で chan-suite を clone します。
+```cmd
+.\deploy\start_all.bat Intranet <server-host>
+```
 
-   ```powershell
-   git clone <chan-suite-repository-url> chan-suite
-   Set-Location .\chan-suite
-   ```
+または:
 
-2. 各 repository を `chan-suite/apps/` 配下へ clone します。
+```powershell
+.\deploy\start_all.ps1 -Profile Intranet -ServerHost <server-host>
+```
 
-   ```powershell
-   Set-Location .\apps
-   git clone <chan-portal-repository-url> chan-portal
-   git clone <bochan-repository-url> bochan
-   git clone <malchan-repository-url> malchan
-   git clone <cauchan-repository-url> cauchan
-   git clone <dchan-repository-url> dchan
-   Set-Location ..
-   ```
+### macOS / Linux / Git Bash
 
-3. 各アプリの README に従い、依存関係を個別にセットアップします。
-4. 各アプリを従来の方法で単独起動できることを確認して停止します。
-5. 利用者が名前解決・到達できるホストを指定して一括起動します。
+Local:
 
-   ```powershell
-   .\deploy\start_all.ps1 `
-       -Profile Intranet `
-       -ServerHost <server-host>
-   ```
+```bash
+sh ./deploy/start_all.sh
+```
 
-   `-ServerHost` を省略する場合は、先に `$env:CHAN_SERVER_HOST = '<server-host>'` を設定します。parameter が環境変数より優先されます。両方なければ安全にエラー終了します。
+Intranet:
 
-6. 状態と URL を確認します。
+```bash
+sh ./deploy/start_all.sh Intranet <server-host>
+```
 
-   ```powershell
-   .\deploy\status.ps1 -Profile Intranet -ServerHost <server-host>
-   ```
+または:
 
-7. Windows Defender Firewall では必要な Frontend ポート（5172～5176）だけを許可します。Backend API ポートを直接公開するかは個別に判断します。
-8. 別の社内 PC から `http://<server-host>:5172` へアクセスします。
+```bash
+CHAN_SERVER_HOST=<server-host> sh ./deploy/start_all.sh Intranet
+```
 
-## Profile と公開時の注意
+shell版は各アプリの `.venv` とpnpm frontendを直接起動します。ポートは `config/apps.json` を読み取り、Vite/FastAPIへbind hostを直接指定します。標準出力・標準エラー・PIDは `logs/` 配下へ保存します。
+
+## 5. repositoryを一括 update
+
+Windows:
+
+```cmd
+.\deploy\update_all.bat
+```
+
+macOS / Linux / Git Bash:
+
+```bash
+sh ./deploy/update_all.sh
+```
+
+各 repository の現在branchに対して `git pull --ff-only` を実行します。working treeに変更がある、detached HEAD、fast-forwardできない、非Gitディレクトリ、といった状態では更新せずエラーにします。
+
+このため、開発中のローカル変更を自動stash・reset・mergeすることはありません。
+
+## 開発者 PC
+
+各アプリ repository 単独で従来どおり開発・起動できます。
+
+```powershell
+Set-Location .\apps\bochan
+.\start_web.bat
+```
+
+chan-suiteの一括操作は、各repository単独の開発方法を置き換えるものではありません。
+
+## Intranet profile と公開時の注意
 
 `config/profiles.json` は Local の bind/public host を `127.0.0.1`、Intranet の bind host を `0.0.0.0` と定義します。Intranet の public host は環境依存なので repository に保存しません。`0.0.0.0` はブラウザへ入力する URL ではありません。
 
-chan-suite は `CHAN_BIND_HOST` などを子プロセスへ渡すだけです。各アプリの起動スクリプトと Vite／FastAPI がその値を利用するまでは、Intranet profile だけで LAN 公開は完結しません。各アプリの対応状況を確認してください。chan-portal のリンク URL は `VITE_<APP>_URL` として起動時環境に渡されますが、chan-portal 側がそれらを参照する必要があります。
+Windowsの `start_all.ps1` は各repositoryの既存起動スクリプトへ `CHAN_BIND_HOST` などを渡します。その起動スクリプト側がまだこれらの値を参照していない場合、アプリ自身の既定bind hostが優先される場合があります。Local profileには影響しません。
 
-Intranet 状態確認で listener が loopback のみと判定できた場合は警告します。Firewall は組織の方針に従い、必要最小限の送信元とポートに限定してください。
+shell版 `start_all.sh` はFastAPI/Viteへbind hostを直接指定します。
+
+Firewallは組織の方針に従い、必要最小限の送信元とポートだけを許可してください。Frontendは初期設定で5172～5176、Backend APIは8001～8004です。実際の値は `config/apps.json` を正とします。
+
+## 状態確認
+
+Windows:
+
+```powershell
+.\deploy\status.ps1 -Profile Local
+.\deploy\status.ps1 -Profile Intranet -ServerHost <server-host>
+```
+
+状態確認では各ポートのLISTEN状態と利用者向けURLを表示します。
 
 ## 停止とログ
 
-`.\deploy\stop_all.ps1` は安全性を優先し、プロセスを終了しません。起動したターミナル、または各アプリが提供する停止手順を使用してください。ポート番号だけを根拠にプロセスを kill しません。
+```powershell
+.\deploy\stop_all.ps1
+```
 
-起動スクリプトの標準出力と標準エラーは `logs/` に保存され、Git には登録されません。
+`stop_all.ps1` は安全性を優先し、ポート番号だけを根拠に無関係なプロセスをkillしません。各アプリ固有の停止手順を案内します。
+
+Windows PowerShell起動のログは `logs/<name>.log` / `logs/<name>.error.log` に保存します。shell版はFrontend/Backendごとのログと `logs/*.pid` を保存しますが、PIDは現時点では自動killには使いません。
