@@ -5,6 +5,7 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 SUITE_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 APPS_DIR="$SUITE_ROOT/apps"
 FAILED=0
+PYTHON_VERSION=${CHAN_PYTHON_VERSION:-3.12}
 
 if ! command -v pnpm >/dev/null 2>&1; then
   echo "[ERROR] pnpm was not found on PATH."
@@ -44,10 +45,15 @@ setup_python() {
   fi
 
   if ! venv_python=$(find_venv_python "$app_dir"); then
-    echo "[SETUP] $app Python virtual environment"
+    echo "[SETUP] $app Python $PYTHON_VERSION virtual environment"
     if [ "$USE_UV" -eq 1 ]; then
-      (cd "$app_dir" && uv venv .venv) || { echo "[ERROR] $app: failed to create .venv."; FAILED=1; return; }
+      (cd "$app_dir" && uv venv --python "$PYTHON_VERSION" .venv) || { echo "[ERROR] $app: failed to create .venv with Python $PYTHON_VERSION."; FAILED=1; return; }
     else
+      "$BASE_PYTHON" -c 'import sys; expected=sys.argv[1]; actual=f"{sys.version_info.major}.{sys.version_info.minor}"; raise SystemExit(0 if actual == expected else 1)' "$PYTHON_VERSION" || {
+        echo "[ERROR] $app: $BASE_PYTHON is not Python $PYTHON_VERSION. Install uv or set CHAN_PYTHON_VERSION to the available compatible version."
+        FAILED=1
+        return
+      }
       (cd "$app_dir" && "$BASE_PYTHON" -m venv .venv) || { echo "[ERROR] $app: failed to create .venv."; FAILED=1; return; }
     fi
     venv_python=$(find_venv_python "$app_dir") || { echo "[ERROR] $app: .venv Python was not found after creation."; FAILED=1; return; }
