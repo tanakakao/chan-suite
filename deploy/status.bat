@@ -20,12 +20,12 @@ if errorlevel 1 (
 
 if /i "%PROFILE%"=="Intranet" (
     if defined SERVER_HOST (
-        powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0start_all.ps1" -Profile Intranet -ServerHost "%SERVER_HOST%"
+        powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0status.ps1" -Profile Intranet -ServerHost "%SERVER_HOST%"
     ) else (
-        powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0start_all.ps1" -Profile Intranet
+        powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0status.ps1" -Profile Intranet
     )
 ) else (
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0start_all.ps1" -Profile Local
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0status.ps1" -Profile Local
 )
 
 exit /b %ERRORLEVEL%
