@@ -102,8 +102,17 @@ start_bg() {
   echo "[START] $name"
   (
     cd "$working_dir" || exit 1
+    rm -f "$LOGS_DIR/$name.pid" "$LOGS_DIR/$name.cwd" "$LOGS_DIR/$name.start" "$LOGS_DIR/$name.managed"
     nohup "$@" >"$LOGS_DIR/$name.log" 2>"$LOGS_DIR/$name.error.log" &
-    echo $! >"$LOGS_DIR/$name.pid"
+    pid=$!
+    printf '%s\n' "$pid" >"$LOGS_DIR/$name.pid"
+    pwd -P >"$LOGS_DIR/$name.cwd"
+    printf '%s\n' 'chan-suite-v1' >"$LOGS_DIR/$name.managed"
+    if [ -r "/proc/$pid/stat" ]; then
+      awk '{print $22}' "/proc/$pid/stat" >"$LOGS_DIR/$name.start" 2>/dev/null || : >"$LOGS_DIR/$name.start"
+    else
+      : >"$LOGS_DIR/$name.start"
+    fi
   ) || {
     echo "[ERROR] $name: failed to launch."
     FAILED=1
