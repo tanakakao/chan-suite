@@ -125,7 +125,7 @@ start_frontend() {
     FAILED=1
     return
   fi
-  start_bg "$name" "$working_dir" "$@" pnpm run dev -- --host "$BIND_HOST" --port "$port" --strictPort
+  start_bg "$name" "$working_dir" "$@" pnpm run dev --host "$BIND_HOST" --port "$port" --strictPort
 }
 
 PORTAL="$APPS_DIR/chan-portal"
