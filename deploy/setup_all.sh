@@ -11,60 +11,44 @@ if ! command -v pnpm >/dev/null 2>&1; then
   echo "[ERROR] pnpm was not found on PATH."
   exit 1
 fi
-
-USE_UV=0
-BASE_PYTHON=""
-if command -v uv >/dev/null 2>&1; then
-  USE_UV=1
-elif command -v python3 >/dev/null 2>&1; then
-  BASE_PYTHON=python3
-elif command -v python >/dev/null 2>&1; then
-  BASE_PYTHON=python
-else
-  echo "[ERROR] Neither uv nor Python was found on PATH."
+if ! command -v uv >/dev/null 2>&1; then
+  echo "[ERROR] uv was not found on PATH."
+  echo "Python environments in chan-suite are managed from each repository's uv.lock."
   exit 1
 fi
 
-find_venv_python() {
-  if [ -x "$1/.venv/bin/python" ]; then
-    printf '%s\n' "$1/.venv/bin/python"
-  elif [ -x "$1/.venv/Scripts/python.exe" ]; then
-    printf '%s\n' "$1/.venv/Scripts/python.exe"
-  else
-    return 1
-  fi
-}
-
 setup_python() {
   app=$1
-  spec=$2
+  profile=$2
   app_dir="$APPS_DIR/$app"
   if [ ! -f "$app_dir/pyproject.toml" ]; then
     echo "[SKIP] $app Python: pyproject.toml not found."
     return
   fi
-
-  if ! venv_python=$(find_venv_python "$app_dir"); then
-    echo "[SETUP] $app Python $PYTHON_VERSION virtual environment"
-    if [ "$USE_UV" -eq 1 ]; then
-      (cd "$app_dir" && uv venv --python "$PYTHON_VERSION" .venv) || { echo "[ERROR] $app: failed to create .venv with Python $PYTHON_VERSION."; FAILED=1; return; }
-    else
-      "$BASE_PYTHON" -c 'import sys; expected=sys.argv[1]; actual=f"{sys.version_info.major}.{sys.version_info.minor}"; raise SystemExit(0 if actual == expected else 1)' "$PYTHON_VERSION" || {
-        echo "[ERROR] $app: $BASE_PYTHON is not Python $PYTHON_VERSION. Install uv or set CHAN_PYTHON_VERSION to the available compatible version."
-        FAILED=1
-        return
-      }
-      (cd "$app_dir" && "$BASE_PYTHON" -m venv .venv) || { echo "[ERROR] $app: failed to create .venv."; FAILED=1; return; }
-    fi
-    venv_python=$(find_venv_python "$app_dir") || { echo "[ERROR] $app: .venv Python was not found after creation."; FAILED=1; return; }
+  if [ ! -f "$app_dir/uv.lock" ]; then
+    echo "[ERROR] $app Python: uv.lock not found."
+    echo "        Update the repository; do not generate a deployment lockfile implicitly."
+    FAILED=1
+    return
   fi
 
-  echo "[SETUP] $app Python dependencies: $spec"
-  if [ "$USE_UV" -eq 1 ]; then
-    (cd "$app_dir" && uv pip install --python "$venv_python" --upgrade -e "$spec") || { echo "[ERROR] $app: Python dependency installation failed."; FAILED=1; return; }
-  else
-    (cd "$app_dir" && "$venv_python" -m pip install --upgrade pip && "$venv_python" -m pip install --upgrade -e "$spec") || { echo "[ERROR] $app: Python dependency installation failed."; FAILED=1; return; }
-  fi
+  echo "[SETUP] $app Python $PYTHON_VERSION from uv.lock"
+  case "$profile" in
+    bochan-web)
+      (cd "$app_dir" && uv sync --locked --python "$PYTHON_VERSION" --extra web) || { echo "[ERROR] $app: uv sync --locked failed."; FAILED=1; return; }
+      ;;
+    malchan-web)
+      (cd "$app_dir" && uv sync --locked --python "$PYTHON_VERSION" --extra web --extra models --extra inverse --extra visualization) || { echo "[ERROR] $app: uv sync --locked failed."; FAILED=1; return; }
+      ;;
+    core)
+      (cd "$app_dir" && uv sync --locked --python "$PYTHON_VERSION") || { echo "[ERROR] $app: uv sync --locked failed."; FAILED=1; return; }
+      ;;
+    *)
+      echo "[ERROR] $app: unknown setup profile: $profile"
+      FAILED=1
+      return
+      ;;
+  esac
   echo "[OK] $app Python"
 }
 
@@ -88,19 +72,19 @@ setup_frontend() {
     return
   fi
 
-  echo "[SETUP] $app frontend"
+  echo "[SETUP] $app frontend from pnpm-lock.yaml"
   (cd "$frontend_dir" && pnpm install --frozen-lockfile) || { echo "[ERROR] $app: pnpm install failed."; FAILED=1; return; }
   echo "[OK] $app frontend"
 }
 
 setup_frontend chan-portal .
-setup_python bochan '.[web]'
+setup_python bochan bochan-web
 setup_frontend bochan web
-setup_python malchan '.[web,models,inverse,visualization]'
+setup_python malchan malchan-web
 setup_frontend malchan frontend
-setup_python cauchan .
+setup_python cauchan core
 setup_frontend cauchan web
-setup_python dchan .
+setup_python dchan core
 setup_frontend dchan frontend
 
 if [ "$FAILED" -ne 0 ]; then
@@ -108,4 +92,4 @@ if [ "$FAILED" -ne 0 ]; then
   exit 1
 fi
 
-echo "[OK] All available applications are set up."
+echo "[OK] All available applications are set up from committed lockfiles."
