@@ -132,7 +132,7 @@ function Start-Frontend {
     }
 
     Start-ManagedProcess -Name $name -FilePath $PnpmPath `
-        -ArgumentList @('run', 'dev', '--', '--host', $resolvedProfile.BindHost, '--port', [string]$port, '--strictPort') `
+        -ArgumentList @('run', 'dev', '--host', $resolvedProfile.BindHost, '--port', [string]$port, '--strictPort') `
         -WorkingDirectory $workingDirectory -Environment $Environment
 }
 
