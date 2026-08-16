@@ -153,7 +153,7 @@ dchan            frontend/pnpm-lock.yaml
 .\deploy\start_all.bat
 ```
 
-`start_all.bat` は既存のPowerShellランチャーを呼び出します。
+`start_all.bat` は PowerShell ランチャーを Local profile で呼び出します。
 
 ```powershell
 .\deploy\start_all.ps1 -Profile Local
@@ -191,7 +191,25 @@ sh ./deploy/start_all.sh Intranet <server-host>
 CHAN_SERVER_HOST=<server-host> sh ./deploy/start_all.sh Intranet
 ```
 
-shell版は `setup_all` が作成した各アプリの `.venv` と pnpm frontend を直接起動します。ポートは `config/apps.json` を読み取り、Vite/FastAPIへbind hostを直接指定します。標準出力・標準エラー・PIDは `logs/` 配下へ保存します。
+Windows の `start_all.ps1` と shell 版 `start_all.sh` は、どちらも `setup_all` が作成した各アプリの `.venv` と pnpm frontend を **chan-suite から直接起動**します。各アプリの `start_web.bat` の bind 設定には依存しません。
+
+起動時は `config/apps.json` のポートを使い、profile に応じて FastAPI / Vite の bind host を直接指定します。Local は `127.0.0.1`、Intranet は `0.0.0.0` です。一方、portal のリンク、Frontend から参照する API URL、CORS origin には `ServerHost` で指定した利用者向け public host を使います。
+
+たとえば次の起動では、
+
+```cmd
+.\deploy\start_all.bat Intranet chan-server
+```
+
+待受は `0.0.0.0` ですが、利用者向け URL は次のようになります。
+
+```text
+http://chan-server:5172
+```
+
+`0.0.0.0` をブラウザへ入力する必要はありません。
+
+Windows では標準出力・標準エラーを `logs/<process>.log` / `logs/<process>.error.log` に保存します。shell 版は同じログに加えて PID を `logs/*.pid` に保存します。
 
 ## 5. repositoryを一括 update
 
@@ -220,17 +238,15 @@ Set-Location .\apps\bochan
 .\start_web.bat
 ```
 
-各アプリのPython環境の詳細は、その repository の `ENVIRONMENT.md` を参照してください。chan-suiteの一括操作は、各repository単独の開発方法を置き換えるものではありません。
+各アプリのPython環境の詳細は、その repository の `ENVIRONMENT.md` を参照してください。各アプリ単独の `start_web.bat` は主に Local 開発用であり、共通サーバーの Intranet 起動は chan-suite の `start_all` を使用します。
 
 ## Intranet profile と公開時の注意
 
-`config/profiles.json` は Local の bind/public host を `127.0.0.1`、Intranet の bind host を `0.0.0.0` と定義します。Intranet の public host は環境依存なので repository に保存しません。`0.0.0.0` はブラウザへ入力する URL ではありません。
+`config/profiles.json` は Local の bind/public host を `127.0.0.1`、Intranet の bind host を `0.0.0.0` と定義します。Intranet の public host は環境依存なので repository に保存せず、起動時の `<server-host>` または `CHAN_SERVER_HOST` で指定します。
 
-Windowsの `start_all.ps1` は各repositoryの既存起動スクリプトへ `CHAN_BIND_HOST` などを渡します。その起動スクリプト側がまだこれらの値を参照していない場合、アプリ自身の既定bind hostが優先される場合があります。Local profileには影響しません。
+Windows / shell の両方で、FastAPI と Vite には bind host を直接渡します。malchan / cauchan / dchan の CORS origin と browser-facing API URL には public host を渡すため、`0.0.0.0` がブラウザ向けURLに混ざりません。
 
-shell版 `start_all.sh` はFastAPI/Viteへbind hostを直接指定します。
-
-Firewallは組織の方針に従い、必要最小限の送信元とポートだけを許可してください。Frontendは初期設定で5172～5176、Backend APIは8001～8004です。実際の値は `config/apps.json` を正とします。
+Firewallは組織の方針に従い、必要最小限の送信元とポートだけを許可してください。現在の構成では Frontend は5172～5176、Backend APIは8001～8004です。実際の値は `config/apps.json` を正とします。
 
 ## 状態確認
 
