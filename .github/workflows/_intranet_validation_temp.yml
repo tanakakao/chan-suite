@@ -1,0 +1,55 @@
+name: Validate Windows intranet launcher
+
+on:
+  push:
+    branches:
+      - agent/adopt-uv-lock-suite
+    paths:
+      - "deploy/start_all.ps1"
+      - "deploy/start_all.bat"
+      - "deploy/common.ps1"
+      - ".github/workflows/_intranet_validation_temp.yml"
+
+jobs:
+  windows-intranet:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pnpm
+        shell: pwsh
+        run: npm install --global pnpm@11.21.0
+      - name: Parse PowerShell launcher
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'deploy/start_all.ps1'),
+            [ref]$tokens,
+            [ref]$errors
+          )
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+      - name: Validate Local profile without cloned apps
+        shell: pwsh
+        run: |
+          $output = & .\deploy\start_all.ps1 -Profile Local | Out-String
+          Write-Host $output
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($output -notmatch '\[PROFILE\] Local; bind host: 127\.0\.0\.1; public host: 127\.0\.0\.1') { exit 1 }
+          if ($output -notmatch 'Portal\s+: http://127\.0\.0\.1:5172') { exit 1 }
+      - name: Validate Intranet profile without cloned apps
+        shell: pwsh
+        run: |
+          $output = & .\deploy\start_all.ps1 -Profile Intranet -ServerHost chan-server | Out-String
+          Write-Host $output
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($output -notmatch '\[PROFILE\] Intranet; bind host: 0\.0\.0\.0; public host: chan-server') { exit 1 }
+          if ($output -notmatch 'Portal\s+: http://chan-server:5172') { exit 1 }
+          if ($output -notmatch 'bochan\s+: http://chan-server:5173') { exit 1 }
+          if ($output -notmatch 'dchan\s+: http://chan-server:5176') { exit 1 }
+      - name: Validate batch wrapper
+        shell: cmd
+        run: call deploy\start_all.bat Intranet chan-server
