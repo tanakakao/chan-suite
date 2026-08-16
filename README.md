@@ -33,6 +33,8 @@ chan-suite/
 
 ## 最短セットアップ
 
+事前に Git、uv、Node.js、pnpm を利用可能にしてください。Python backend の環境は各アプリの `uv.lock`、Frontend は各 `pnpm-lock.yaml` から再現します。
+
 ### Windows
 
 ```cmd
@@ -134,9 +136,11 @@ macOS / Linux / Git Bash:
 sh ./deploy/setup_all.sh
 ```
 
-Python backend を持つ bochan / malchan / cauchan / dchan には repository ごとの `.venv` を作成し、Frontend は各 `pnpm-lock.yaml` に対して `pnpm install --frozen-lockfile` を実行します。`uv` が利用可能な場合は優先して使用します。
+Python backend を持つ bochan / malchan / cauchan / dchan は **uv 必須**です。各 repository が Git 管理する `pyproject.toml` と `uv.lock` を正本とし、`setup_all` は `uv sync --locked` で repository ごとの `.venv` を作成・同期します。`uv.lock` が無い、または `pyproject.toml` と一致しない場合は、配置先で新しい依存解決を行わずエラー終了します。
 
-Python は4アプリで共通して利用できる **3.12** を既定にしています。変更する場合は `CHAN_PYTHON_VERSION` を指定できます。
+Frontend は各 `pnpm-lock.yaml` に対して `pnpm install --frozen-lockfile` を実行します。したがって Python と Frontend のどちらも、開発PC・別PC・社内サーバーで同じ lockfile を利用します。
+
+Python は4アプリで共通して利用できる **3.12** を既定にしています。各 repository の `.python-version` も 3.12 です。必要な場合だけ、各アプリの `requires-python` の範囲内で `CHAN_PYTHON_VERSION` を指定できます。
 
 ```cmd
 set CHAN_PYTHON_VERSION=3.11
@@ -147,13 +151,15 @@ set CHAN_PYTHON_VERSION=3.11
 CHAN_PYTHON_VERSION=3.11 sh ./deploy/setup_all.sh
 ```
 
-Python extras は Web 実行に必要な範囲をセットアップします。
+実際のPython同期コマンドは次の構成です。
 
-- bochan: `.[web]`
-- malchan: `.[web,models,inverse,visualization]`
-- cauchan: `.`
-- dchan: `.`
+- bochan: `uv sync --locked --extra web`
+- malchan: `uv sync --locked --extra web --extra models --extra inverse --extra visualization`
+- cauchan: `uv sync --locked`
+- dchan: `uv sync --locked`
 - chan-portal: Python backend なし
+
+`.venv/` は各 repository 内に生成されますが Git には含めません。依存関係を意図的に変更する場合は各アプリ側で `pyproject.toml` を変更して `uv lock` を実行し、`uv.lock` も同じPRで更新します。chan-suite の `setup_all` は lockfile を生成・更新しません。
 
 ## 4. 全アプリを起動
 
@@ -223,7 +229,7 @@ sh ./deploy/setup_all.sh
 sh ./deploy/start_all.sh
 ```
 
-`setup_all` は lockfile に従うため、依存関係が変わっていなければ再実行しても問題ありません。
+`setup_all` は commit 済みの `uv.lock` / `pnpm-lock.yaml` に従うため、依存関係が変わっていなければ再実行しても同じ環境へ同期されます。
 
 ## Local development
 
@@ -233,6 +239,8 @@ sh ./deploy/start_all.sh
 Set-Location .\apps\bochan
 .\start_web.bat
 ```
+
+各アプリの `start_web.bat` も lockfile を前提とします。詳細なPython環境管理は各 repository の `ENVIRONMENT.md` を参照してください。
 
 chan-suite は一括管理用であり、各 repository の単独開発を置き換えるものではありません。
 
