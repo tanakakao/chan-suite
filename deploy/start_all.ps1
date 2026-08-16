@@ -123,7 +123,7 @@ function Start-Frontend {
         return
     }
     if (-not (Test-Path -LiteralPath (Join-Path $workingDirectory 'pnpm-lock.yaml') -PathType Leaf)) {
-        throw "$name: pnpm-lock.yaml was not found. Run setup_all.bat first."
+        throw "${name}: pnpm-lock.yaml was not found. Run setup_all.bat first."
     }
 
     $port = [int]$Application.frontendPort
@@ -152,7 +152,7 @@ function Start-Backend {
 
     $pythonPath = Get-VenvPython -ApplicationPath $applicationPath
     if ($null -eq $pythonPath) {
-        throw "$name: .venv Python was not found. Run setup_all.bat first."
+        throw "${name}: .venv Python was not found. Run setup_all.bat first."
     }
 
     $port = [int]$Application.backendPort
