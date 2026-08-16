@@ -74,6 +74,7 @@ function Start-ManagedProcess {
             -WorkingDirectory $WorkingDirectory `
             -RedirectStandardOutput $stdoutPath `
             -RedirectStandardError $stderrPath `
+            -WindowStyle Hidden `
             -PassThru
         Write-Host ("[STARTED] {0}: PID {1}" -f $Name, $process.Id)
     }
