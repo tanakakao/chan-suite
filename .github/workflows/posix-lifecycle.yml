@@ -1,0 +1,40 @@
+name: POSIX lifecycle
+
+on:
+  pull_request:
+    paths:
+      - "deploy/start_all.sh"
+      - "deploy/status.sh"
+      - "deploy/stop_all.sh"
+      - "README.md"
+      - "tests/test_posix_lifecycle.py"
+      - ".github/workflows/posix-lifecycle.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "deploy/start_all.sh"
+      - "deploy/status.sh"
+      - "deploy/stop_all.sh"
+      - "README.md"
+      - "tests/test_posix_lifecycle.py"
+      - ".github/workflows/posix-lifecycle.yml"
+
+jobs:
+  lifecycle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate lifecycle contract
+        run: python -m unittest tests/test_posix_lifecycle.py
+      - name: Validate shell syntax
+        run: sh -n deploy/start_all.sh deploy/status.sh deploy/stop_all.sh
+      - name: Exercise Local status command
+        run: sh deploy/status.sh Local
+      - name: Exercise Intranet status command
+        run: sh deploy/status.sh Intranet ci-host
+      - name: Exercise empty managed stop
+        run: sh deploy/stop_all.sh
