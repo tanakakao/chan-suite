@@ -85,8 +85,8 @@ chan-suite/
 ├─ apps/               ← 各アプリの独立した Git repository（Git 管理外）
 ├─ config/apps.json    ← アプリ固有のパス、ポート、有効／無効
 ├─ config/profiles.json← Local／Intranet の bind/public host
-├─ deploy/             ← clone・update・setup・start・status 用スクリプト
-└─ logs/               ← 実行時ログ（Git 管理外）
+├─ deploy/             ← clone・update・setup・start・status・stop 用スクリプト
+└─ logs/               ← 実行時ログと管理PID情報（Git 管理外）
 ```
 
 ## 個別操作
@@ -198,7 +198,7 @@ Intranet profile:
 sh ./deploy/start_all.sh Intranet chan-server
 ```
 
-shell版は各 repository の `.venv` と pnpm frontend を直接起動し、`config/apps.json` のポートを参照します。標準出力・標準エラーと PID は `logs/` に保存します。
+shell版は各 repository の `.venv` と pnpm frontend を直接起動し、`config/apps.json` のポートを参照します。標準出力・標準エラーと PID は `logs/` に保存します。Linuxでは安全な停止のため、PIDに加えて実行ディレクトリとプロセス開始IDも管理情報として保存します。
 
 ## 日常の更新フロー
 
@@ -235,15 +235,59 @@ Set-Location .\apps\bochan
 
 ## 状態確認・停止
 
-Windows:
+### Windows
+
+CMDから状態確認する場合:
+
+```cmd
+.\deploy\status.bat
+.\deploy\status.bat Intranet chan-server
+```
+
+PowerShellを直接使う場合:
 
 ```powershell
 .\deploy\status.ps1
 .\deploy\status.ps1 -Profile Intranet -ServerHost chan-server
+```
+
+`stop_all.ps1` は現時点では安全性を優先して実停止を行わず、手動停止の案内だけを表示します。ポート番号だけを根拠に無関係なプロセスを kill することはありません。
+
+```powershell
 .\deploy\stop_all.ps1
 ```
 
-`stop_all.ps1` は安全性を優先し、ポート番号だけを根拠に無関係なプロセスを kill しません。
+### Linux
+
+Local profile の状態確認:
+
+```bash
+sh ./deploy/status.sh
+```
+
+Intranet profile の状態確認:
+
+```bash
+sh ./deploy/status.sh Intranet chan-server
+```
+
+`status.sh` は `config/apps.json` の各 frontend/backend ポートを確認し、`RUNNING` / `STOPPED` とアクセスURLを表示します。
+
+`start_all.sh` から起動した管理対象プロセスを停止する場合:
+
+```bash
+sh ./deploy/stop_all.sh
+```
+
+`stop_all.sh` は **Linux `/proc` を利用した安全な管理停止**です。`start_all.sh` が保存した PID、実行ディレクトリ、プロセス開始IDを照合し、すべて一致した管理対象だけに `SIGTERM` を送ります。PIDが再利用されて別プロセスになっている場合や、実行ディレクトリが `chan-suite/apps/` 外の場合は停止しません。ポート番号を根拠にプロセスを kill することもありません。
+
+停止待ち時間は既定10秒です。必要な場合は `CHAN_STOP_TIMEOUT` で変更できます。
+
+```bash
+CHAN_STOP_TIMEOUT=20 sh ./deploy/stop_all.sh
+```
+
+この管理情報は新しい `start_all.sh` で起動したときに作成されます。更新前の `start_all.sh` で既に起動しているプロセスには管理情報がないため、一度従来の方法で停止してから新しい `start_all.sh` で起動してください。
 
 ## 初期ポート
 
