@@ -3,6 +3,7 @@ setlocal EnableExtensions
 
 cd /d "%~dp0"
 set "START_AFTER_SETUP=0"
+set "MISSING_TOOLS=0"
 
 if /i "%~1"=="--start" (
     set "START_AFTER_SETUP=1"
@@ -22,7 +23,7 @@ call :require_tool uv "uv"
 call :require_tool node "Node.js"
 call :require_tool pnpm "pnpm"
 
-if errorlevel 1 (
+if not "%MISSING_TOOLS%"=="0" (
     echo.
     echo [ERROR] Required tools are missing.
     echo Install the tools shown above and run install.bat again.
@@ -68,7 +69,8 @@ exit /b 0
 where %~1 >nul 2>&1
 if errorlevel 1 (
     echo [MISSING] %~2 ^(%~1^)
-    exit /b 1
+    set "MISSING_TOOLS=1"
+    exit /b 0
 )
 echo [OK] %~2
 exit /b 0
