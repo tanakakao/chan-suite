@@ -38,7 +38,7 @@ setup_python() {
       (cd "$app_dir" && uv sync --locked --python "$PYTHON_VERSION" --extra web) || { echo "[ERROR] $app: uv sync --locked failed."; FAILED=1; return; }
       ;;
     malchan-web)
-      (cd "$app_dir" && uv sync --locked --python "$PYTHON_VERSION" --extra web --extra models --extra inverse --extra visualization) || { echo "[ERROR] $app: uv sync --locked failed."; FAILED=1; return; }
+      (cd "$app_dir" && uv sync --locked --python "$PYTHON_VERSION" --extra web --extra models --extra materials --extra inverse --extra visualization) || { echo "[ERROR] $app: uv sync --locked failed."; FAILED=1; return; }
       ;;
     core)
       (cd "$app_dir" && uv sync --locked --python "$PYTHON_VERSION") || { echo "[ERROR] $app: uv sync --locked failed."; FAILED=1; return; }
