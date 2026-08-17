@@ -289,6 +289,69 @@ CHAN_STOP_TIMEOUT=20 sh ./deploy/stop_all.sh
 
 この管理情報は新しい `start_all.sh` で起動したときに作成されます。更新前の `start_all.sh` で既に起動しているプロセスには管理情報がないため、一度従来の方法で停止してから新しい `start_all.sh` で起動してください。
 
+## Linuxサーバー起動時の自動起動（systemd）
+
+Linux共通サーバーでは、systemdへ `chan-suite.service` を登録すると、**OS起動後にchan-suiteを自動起動**できます。サービス自体はrootではなく、インストーラーを実行した通常のLinuxユーザーで動作します。
+
+Intranet profileを自動起動へ登録する場合:
+
+```bash
+sh ./deploy/systemd/install.sh Intranet <server-host>
+```
+
+例:
+
+```bash
+sh ./deploy/systemd/install.sh Intranet chan-server
+```
+
+このコマンドはsystemd設定の書き込み時だけ `sudo` を要求し、`chan-suite.service` を `multi-user.target` へenableします。現在動いているアプリは変更せず、**次回のサーバー起動から自動起動**します。
+
+現在の手動起動プロセスを安全に停止し、その場でsystemd管理へ切り替える場合:
+
+```bash
+sh ./deploy/systemd/install.sh --now Intranet <server-host>
+```
+
+`--now` は先に `stop_all.sh` の安全な管理停止を実行し、成功した場合だけsystemd serviceを開始します。
+
+登録状態とサービス状態の確認:
+
+```bash
+systemctl is-enabled chan-suite.service
+sudo systemctl status chan-suite.service
+```
+
+手動で再起動・停止・開始する場合:
+
+```bash
+sudo systemctl restart chan-suite.service
+sudo systemctl stop chan-suite.service
+sudo systemctl start chan-suite.service
+```
+
+systemd launcher自体のログ:
+
+```bash
+journalctl -u chan-suite.service
+```
+
+各frontend/backendの実行ログは従来どおり `logs/` 配下に保存されます。
+
+自動起動だけ無効にして現在のserviceも停止する場合:
+
+```bash
+sudo systemctl disable --now chan-suite.service
+```
+
+systemd設定自体を削除する場合:
+
+```bash
+sh ./deploy/systemd/uninstall.sh
+```
+
+`install.sh` は起動時に必要な `pnpm` / `node` / Python の実行パスを `/etc/chan-suite/chan-suite.env` に記録するため、対話shellとsystemdでPATHが異なる環境でも同じツールを利用できます。Node.jsやpnpmの配置場所を変更した場合は、インストーラーを再実行してください。
+
 ## 初期ポート
 
 | アプリ | Frontend | Backend API |
