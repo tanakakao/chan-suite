@@ -6,8 +6,11 @@ on:
       - "deploy/start_all.sh"
       - "deploy/status.sh"
       - "deploy/stop_all.sh"
+      - "deploy/systemd/**"
       - "README.md"
+      - "docs/deployment.md"
       - "tests/test_posix_lifecycle.py"
+      - "tests/test_systemd_autostart.py"
       - ".github/workflows/posix-lifecycle.yml"
   push:
     branches:
@@ -16,8 +19,11 @@ on:
       - "deploy/start_all.sh"
       - "deploy/status.sh"
       - "deploy/stop_all.sh"
+      - "deploy/systemd/**"
       - "README.md"
+      - "docs/deployment.md"
       - "tests/test_posix_lifecycle.py"
+      - "tests/test_systemd_autostart.py"
       - ".github/workflows/posix-lifecycle.yml"
 
 jobs:
@@ -29,12 +35,14 @@ jobs:
         with:
           python-version: "3.12"
       - name: Validate lifecycle contract
-        run: python -m unittest tests/test_posix_lifecycle.py
+        run: python -m unittest tests/test_posix_lifecycle.py tests/test_systemd_autostart.py
       - name: Validate shell syntax
-        run: sh -n deploy/start_all.sh deploy/status.sh deploy/stop_all.sh
+        run: sh -n deploy/start_all.sh deploy/status.sh deploy/stop_all.sh deploy/systemd/install.sh deploy/systemd/uninstall.sh
       - name: Exercise Local status command
         run: sh deploy/status.sh Local
       - name: Exercise Intranet status command
         run: sh deploy/status.sh Intranet ci-host
       - name: Exercise empty managed stop
         run: sh deploy/stop_all.sh
+      - name: Render systemd service
+        run: sh deploy/systemd/install.sh --dry-run Intranet ci-host
