@@ -8,7 +8,7 @@
 - Python backend は各アプリの `pyproject.toml` + `uv.lock` を正本とし、repository ごとの `.venv` を uv で生成します。
 - Frontend は各アプリの `package.json` + `pnpm-lock.yaml` を正本とします。
 - `.venv/` と `node_modules/` は生成物であり Git には含めません。
-- Docker、Reverse Proxy、Windows Service、自動更新は使用しません。
+- Docker、Reverse Proxy、Windows Service、自動更新は使用しません。Linux共通サーバーのOS起動連動だけは、任意でsystemdを利用できます。
 
 ## 必要なツール
 
@@ -209,7 +209,60 @@ http://chan-server:5172
 
 `0.0.0.0` をブラウザへ入力する必要はありません。
 
-Windows では標準出力・標準エラーを `logs/<process>.log` / `logs/<process>.error.log` に保存します。shell 版は同じログに加えて PID を `logs/*.pid` に保存します。
+Windows では標準出力・標準エラーを `logs/<process>.log` / `logs/<process>.error.log` に保存します。Linux版は同じログに加え、安全な停止に必要なPID・実行ディレクトリ・プロセス開始IDを `logs/` に保存します。
+
+### Linux / systemd自動起動
+
+Linux共通サーバーでOS起動後に自動的にchan-suiteを起動する場合は、通常のLinuxユーザーで次を実行します。
+
+```bash
+sh ./deploy/systemd/install.sh Intranet <server-host>
+```
+
+systemd設定の書き込み時だけ `sudo` を要求し、サービス本体はインストーラーを実行したユーザーとして起動します。インストール時点で動いているアプリは変更せず、次回bootから自動起動します。
+
+現在の手動起動プロセスを安全に停止し、その場でsystemd管理へ切り替える場合:
+
+```bash
+sh ./deploy/systemd/install.sh --now Intranet <server-host>
+```
+
+確認:
+
+```bash
+systemctl is-enabled chan-suite.service
+sudo systemctl status chan-suite.service
+```
+
+再起動・停止・開始:
+
+```bash
+sudo systemctl restart chan-suite.service
+sudo systemctl stop chan-suite.service
+sudo systemctl start chan-suite.service
+```
+
+systemd launcherのログ:
+
+```bash
+journalctl -u chan-suite.service
+```
+
+frontend/backendのアプリログは従来どおり `logs/` に保存されます。
+
+自動起動を無効化する場合:
+
+```bash
+sudo systemctl disable --now chan-suite.service
+```
+
+systemd設定を削除する場合:
+
+```bash
+sh ./deploy/systemd/uninstall.sh
+```
+
+`install.sh` は現在利用している `pnpm`、`node`、Python のパスを `/etc/chan-suite/chan-suite.env` に保存します。Node.jsやpnpmのインストール場所を変更した場合は、インストーラーを再実行してください。
 
 ## 5. repositoryを一括 update
 
@@ -228,6 +281,14 @@ sh ./deploy/update_all.sh
 各 repository の現在branchに対して `git pull --ff-only` を実行します。working treeに変更がある、detached HEAD、fast-forwardできない、非Gitディレクトリ、といった状態では更新せずエラーにします。
 
 このため、開発中のローカル変更を自動stash・reset・mergeすることはありません。更新後に `setup_all` を再実行すれば、変更後の `uv.lock` / `pnpm-lock.yaml` とローカル環境が同期されます。
+
+systemd管理中に更新する場合は、依存関係の同期後にserviceを再起動してください。
+
+```bash
+sh ./deploy/update_all.sh
+sh ./deploy/setup_all.sh
+sudo systemctl restart chan-suite.service
+```
 
 ## 開発者 PC
 
@@ -252,19 +313,40 @@ Firewallは組織の方針に従い、必要最小限の送信元とポートだ
 
 Windows:
 
-```powershell
-.\deploy\status.ps1 -Profile Local
-.\deploy\status.ps1 -Profile Intranet -ServerHost <server-host>
+```cmd
+.\deploy\status.bat
+.\deploy\status.bat Intranet <server-host>
 ```
 
-状態確認では各ポートのLISTEN状態と利用者向けURLを表示します。
+Linux:
+
+```bash
+sh ./deploy/status.sh
+sh ./deploy/status.sh Intranet <server-host>
+```
+
+状態確認では各ポートのLISTEN状態と利用者向けURLを表示します。systemd管理自体の状態は `sudo systemctl status chan-suite.service` で確認します。
 
 ## 停止とログ
+
+Windowsの `stop_all.ps1` は安全性を優先し、現時点では実停止を行いません。
 
 ```powershell
 .\deploy\stop_all.ps1
 ```
 
-`stop_all.ps1` は安全性を優先し、ポート番号だけを根拠に無関係なプロセスをkillしません。各アプリ固有の停止手順を案内します。
+Linuxでは `start_all.sh` が保存した管理情報を照合して、安全に管理対象だけを停止できます。
 
-Windows PowerShell起動のログは `logs/<name>.log` / `logs/<name>.error.log` に保存します。shell版はFrontend/Backendごとのログと `logs/*.pid` を保存しますが、PIDは現時点では自動killには使いません。
+```bash
+sh ./deploy/stop_all.sh
+```
+
+PID、実行ディレクトリ、Linux `/proc` のプロセス開始IDを照合し、PID再利用などで別プロセスになっている場合は停止しません。ポート番号だけを根拠にkillすることもありません。
+
+systemd管理時は通常、直接 `stop_all.sh` を呼ぶ代わりに次を使用します。
+
+```bash
+sudo systemctl stop chan-suite.service
+```
+
+Windows / Linuxともアプリログは `logs/<name>.log` / `logs/<name>.error.log` に保存します。systemd launcherのログは `journalctl -u chan-suite.service` で確認できます。
