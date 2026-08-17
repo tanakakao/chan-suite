@@ -24,7 +24,7 @@ if errorlevel 1 (
 call :setup_frontend "chan-portal" "."
 call :setup_python "bochan" "--extra web"
 call :setup_frontend "bochan" "web"
-call :setup_python "malchan" "--extra web --extra models --extra inverse --extra visualization"
+call :setup_python "malchan" "--extra web --extra models --extra materials --extra inverse --extra visualization"
 call :setup_frontend "malchan" "frontend"
 call :setup_python "cauchan" ""
 call :setup_frontend "cauchan" "web"
