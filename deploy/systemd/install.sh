@@ -94,25 +94,35 @@ if [ -z "$SERVICE_HOME" ]; then
   exit 1
 fi
 
-if ! command -v pnpm >/dev/null 2>&1; then
+if command -v pnpm >/dev/null 2>&1; then
+  PNPM_BIN=$(command -v pnpm)
+elif [ "$DRY_RUN" -eq 1 ]; then
+  PNPM_BIN=/usr/bin/pnpm
+else
   echo "[ERROR] pnpm was not found on PATH. Run setup_all.sh after installing pnpm."
   exit 1
 fi
-if ! command -v node >/dev/null 2>&1; then
+
+if command -v node >/dev/null 2>&1; then
+  NODE_BIN=$(command -v node)
+elif [ "$DRY_RUN" -eq 1 ]; then
+  NODE_BIN=/usr/bin/node
+else
   echo "[ERROR] node was not found on PATH."
   exit 1
 fi
+
 if command -v python3 >/dev/null 2>&1; then
   HOST_PYTHON=$(command -v python3)
 elif command -v python >/dev/null 2>&1; then
   HOST_PYTHON=$(command -v python)
+elif [ "$DRY_RUN" -eq 1 ]; then
+  HOST_PYTHON=/usr/bin/python3
 else
   echo "[ERROR] Python was not found on PATH."
   exit 1
 fi
 
-PNPM_BIN=$(command -v pnpm)
-NODE_BIN=$(command -v node)
 SERVICE_PATH="$(dirname -- "$PNPM_BIN"):$(dirname -- "$NODE_BIN"):$(dirname -- "$HOST_PYTHON"):/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 if [ "$PROFILE" = "Intranet" ]; then
