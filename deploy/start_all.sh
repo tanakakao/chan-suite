@@ -207,6 +207,7 @@ DCHAN="$APPS_DIR/dchan"
 COMMON_PROFILE="CHAN_SUITE_PROFILE=$PROFILE"
 COMMON_BIND="CHAN_BIND_HOST=$BIND_HOST"
 COMMON_PUBLIC="CHAN_PUBLIC_HOST=$PUBLIC_HOST"
+COMMON_PORTAL="VITE_PORTAL_URL=http://$PUBLIC_HOST:$PORTAL_FRONTEND"
 
 start_frontend chan-portal "$PORTAL_FRONTEND" "$PORTAL" env \
   "$COMMON_PROFILE" "$COMMON_BIND" "$COMMON_PUBLIC" \
@@ -230,7 +231,7 @@ else
     "$bochan_python" -m uvicorn bochan.serving.webapp.app:app --host "$BIND_HOST" --port "$BOCHAN_BACKEND"
 fi
 start_frontend bochan-frontend "$BOCHAN_FRONTEND" "$BOCHAN/web" env \
-  "$COMMON_PROFILE" "$COMMON_BIND" "$COMMON_PUBLIC" \
+  "$COMMON_PROFILE" "$COMMON_BIND" "$COMMON_PUBLIC" "$COMMON_PORTAL" \
   "CHAN_FRONTEND_PORT=$BOCHAN_FRONTEND" "CHAN_BACKEND_PORT=$BOCHAN_BACKEND" \
   "VITE_API_BASE=/api/v1"
 
@@ -249,7 +250,7 @@ else
     "$malchan_python" -m uvicorn "malchan.app:create_app" --factory --host "$BIND_HOST" --port "$MALCHAN_BACKEND"
 fi
 start_frontend malchan-frontend "$MALCHAN_FRONTEND" "$MALCHAN/frontend" env \
-  "$COMMON_PROFILE" "$COMMON_BIND" "$COMMON_PUBLIC" \
+  "$COMMON_PROFILE" "$COMMON_BIND" "$COMMON_PUBLIC" "$COMMON_PORTAL" \
   "CHAN_FRONTEND_PORT=$MALCHAN_FRONTEND" "CHAN_BACKEND_PORT=$MALCHAN_BACKEND" \
   "VITE_API_BASE=http://$PUBLIC_HOST:$MALCHAN_BACKEND/api"
 
@@ -268,7 +269,7 @@ else
     "$cauchan_python" -m uvicorn cauchan.api.app:app --app-dir "$CAUCHAN/src" --host "$BIND_HOST" --port "$CAUCHAN_BACKEND"
 fi
 start_frontend cauchan-frontend "$CAUCHAN_FRONTEND" "$CAUCHAN/web" env \
-  "$COMMON_PROFILE" "$COMMON_BIND" "$COMMON_PUBLIC" \
+  "$COMMON_PROFILE" "$COMMON_BIND" "$COMMON_PUBLIC" "$COMMON_PORTAL" \
   "CHAN_FRONTEND_PORT=$CAUCHAN_FRONTEND" "CHAN_BACKEND_PORT=$CAUCHAN_BACKEND" \
   "VITE_API_BASE_URL=http://$PUBLIC_HOST:$CAUCHAN_BACKEND/api/v1"
 
@@ -287,7 +288,7 @@ else
     "$dchan_python" -m uvicorn application.main:app --host "$BIND_HOST" --port "$DCHAN_BACKEND"
 fi
 start_frontend dchan-frontend "$DCHAN_FRONTEND" "$DCHAN/frontend" env \
-  "$COMMON_PROFILE" "$COMMON_BIND" "$COMMON_PUBLIC" \
+  "$COMMON_PROFILE" "$COMMON_BIND" "$COMMON_PUBLIC" "$COMMON_PORTAL" \
   "CHAN_FRONTEND_PORT=$DCHAN_FRONTEND" "CHAN_BACKEND_PORT=$DCHAN_BACKEND" \
   "VITE_API_URL=http://$PUBLIC_HOST:$DCHAN_BACKEND"
 
