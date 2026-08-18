@@ -19,7 +19,8 @@ class PosixLifecycleContractTest(unittest.TestCase):
 
         self.assertIn("STARTUP_TIMEOUT=${CHAN_STARTUP_TIMEOUT:-60}", text)
         self.assertIn("wait_for_readiness()", text)
-        self.assertIn('add_readiness_target chan-portal', text)
+        self.assertIn('add_readiness_target "$name" "$port"', text)
+        self.assertIn('start_frontend chan-portal', text)
         self.assertIn('add_readiness_target bochan-backend', text)
         self.assertIn('add_readiness_target malchan-backend', text)
         self.assertIn('add_readiness_target cauchan-backend', text)
