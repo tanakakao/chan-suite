@@ -7,7 +7,16 @@ APPS_DIR="$SUITE_ROOT/apps"
 LOGS_DIR="$SUITE_ROOT/logs"
 PROFILE=${1:-Local}
 SERVER_HOST=${2:-${CHAN_SERVER_HOST:-}}
+STARTUP_TIMEOUT=${CHAN_STARTUP_TIMEOUT:-60}
 FAILED=0
+READINESS_TARGETS=""
+
+case "$STARTUP_TIMEOUT" in
+  ''|*[!0-9]*)
+    echo "[ERROR] CHAN_STARTUP_TIMEOUT must be a non-negative integer."
+    exit 1
+    ;;
+esac
 
 case "$PROFILE" in
   Local)
@@ -80,6 +89,57 @@ port_in_use() {
   "$HOST_PYTHON" -c 'import socket,sys; s=socket.socket(); s.settimeout(0.2); code=s.connect_ex(("127.0.0.1", int(sys.argv[1]))); s.close(); raise SystemExit(0 if code == 0 else 1)' "$1" >/dev/null 2>&1
 }
 
+add_readiness_target() {
+  name=$1
+  port=$2
+  READINESS_TARGETS="$READINESS_TARGETS $name:$port"
+}
+
+wait_for_readiness() {
+  elapsed=0
+  announced=0
+
+  while :; do
+    missing=""
+    for target in $READINESS_TARGETS; do
+      name=${target%%:*}
+      port=${target##*:}
+      if ! port_in_use "$port"; then
+        missing="$missing $name:$port"
+      fi
+    done
+
+    if [ -z "$missing" ]; then
+      echo "[READY] All application ports are listening."
+      return 0
+    fi
+
+    if [ "$elapsed" -ge "$STARTUP_TIMEOUT" ]; then
+      echo "[ERROR] Startup readiness timed out after ${STARTUP_TIMEOUT}s."
+      for target in $missing; do
+        name=${target%%:*}
+        port=${target##*:}
+        echo "        $name is not listening on port $port."
+      done
+      return 1
+    fi
+
+    if [ "$announced" -eq 0 ]; then
+      echo "[WAIT] Waiting up to ${STARTUP_TIMEOUT}s for application ports to become ready."
+      announced=1
+    fi
+    sleep 1
+    elapsed=$((elapsed + 1))
+  done
+}
+
+cleanup_failed_start() {
+  echo "[INFO] Cleaning up managed processes from the failed startup attempt."
+  if ! sh "$SCRIPT_DIR/stop_all.sh"; then
+    echo "[WARN] Managed startup cleanup did not complete successfully."
+  fi
+}
+
 find_venv_python() {
   if [ -x "$1/.venv/bin/python" ]; then
     printf '%s\n' "$1/.venv/bin/python"
@@ -125,6 +185,7 @@ start_frontend() {
   port=$2
   working_dir=$3
   shift 3
+  add_readiness_target "$name" "$port"
   if port_in_use "$port"; then
     echo "[RUNNING] $name: port $port is already in use."
     return
@@ -155,6 +216,7 @@ start_frontend chan-portal "$PORTAL_FRONTEND" "$PORTAL" env \
   "VITE_CAUCHAN_URL=http://$PUBLIC_HOST:$CAUCHAN_FRONTEND" \
   "VITE_DCHAN_URL=http://$PUBLIC_HOST:$DCHAN_FRONTEND"
 
+add_readiness_target bochan-backend "$BOCHAN_BACKEND"
 if ! bochan_python=$(find_venv_python "$BOCHAN" 2>/dev/null); then
   echo "[ERROR] bochan-backend: .venv Python not found. Run setup_all.sh first."
   FAILED=1
@@ -172,6 +234,7 @@ start_frontend bochan-frontend "$BOCHAN_FRONTEND" "$BOCHAN/web" env \
   "CHAN_FRONTEND_PORT=$BOCHAN_FRONTEND" "CHAN_BACKEND_PORT=$BOCHAN_BACKEND" \
   "VITE_API_BASE=/api/v1"
 
+add_readiness_target malchan-backend "$MALCHAN_BACKEND"
 if ! malchan_python=$(find_venv_python "$MALCHAN" 2>/dev/null); then
   echo "[ERROR] malchan-backend: .venv Python not found. Run setup_all.sh first."
   FAILED=1
@@ -190,6 +253,7 @@ start_frontend malchan-frontend "$MALCHAN_FRONTEND" "$MALCHAN/frontend" env \
   "CHAN_FRONTEND_PORT=$MALCHAN_FRONTEND" "CHAN_BACKEND_PORT=$MALCHAN_BACKEND" \
   "VITE_API_BASE=http://$PUBLIC_HOST:$MALCHAN_BACKEND/api"
 
+add_readiness_target cauchan-backend "$CAUCHAN_BACKEND"
 if ! cauchan_python=$(find_venv_python "$CAUCHAN" 2>/dev/null); then
   echo "[ERROR] cauchan-backend: .venv Python not found. Run setup_all.sh first."
   FAILED=1
@@ -208,6 +272,7 @@ start_frontend cauchan-frontend "$CAUCHAN_FRONTEND" "$CAUCHAN/web" env \
   "CHAN_FRONTEND_PORT=$CAUCHAN_FRONTEND" "CHAN_BACKEND_PORT=$CAUCHAN_BACKEND" \
   "VITE_API_BASE_URL=http://$PUBLIC_HOST:$CAUCHAN_BACKEND/api/v1"
 
+add_readiness_target dchan-backend "$DCHAN_BACKEND"
 if ! dchan_python=$(find_venv_python "$DCHAN" 2>/dev/null); then
   echo "[ERROR] dchan-backend: .venv Python not found. Run setup_all.sh first."
   FAILED=1
@@ -236,7 +301,13 @@ echo "Logs: $LOGS_DIR"
 
 if [ "$FAILED" -ne 0 ]; then
   echo "[ERROR] One or more applications could not be launched."
+  cleanup_failed_start
   exit 1
 fi
 
-echo "[OK] Launch commands were issued for all applications."
+if ! wait_for_readiness; then
+  cleanup_failed_start
+  exit 1
+fi
+
+echo "[OK] All applications are ready."
