@@ -27,6 +27,8 @@ class SystemdAutostartContractTest(unittest.TestCase):
         self.assertIn("deploy/start_all.sh\" Intranet ci-host", output)
         self.assertIn("ExecStop=/bin/sh", output)
         self.assertIn("deploy/stop_all.sh\"", output)
+        self.assertIn("Restart=on-failure", output)
+        self.assertIn("RestartSec=10", output)
         self.assertIn("KillMode=control-group", output)
         self.assertIn("NoNewPrivileges=true", output)
         self.assertIn("WantedBy=multi-user.target", output)

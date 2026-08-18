@@ -14,6 +14,21 @@ class PosixLifecycleContractTest(unittest.TestCase):
         self.assertIn("'chan-suite-v1' >\"$LOGS_DIR/$name.managed\"", text)
         self.assertIn("awk '{print $22}' \"/proc/$pid/stat\"", text)
 
+    def test_start_waits_for_all_application_ports(self) -> None:
+        text = (ROOT / "deploy" / "start_all.sh").read_text(encoding="utf-8")
+
+        self.assertIn("STARTUP_TIMEOUT=${CHAN_STARTUP_TIMEOUT:-60}", text)
+        self.assertIn("wait_for_readiness()", text)
+        self.assertIn('add_readiness_target "$name" "$port"', text)
+        self.assertIn('start_frontend chan-portal', text)
+        self.assertIn('add_readiness_target bochan-backend', text)
+        self.assertIn('add_readiness_target malchan-backend', text)
+        self.assertIn('add_readiness_target cauchan-backend', text)
+        self.assertIn('add_readiness_target dchan-backend', text)
+        self.assertIn("[READY] All application ports are listening.", text)
+        self.assertIn('sh "$SCRIPT_DIR/stop_all.sh"', text)
+        self.assertIn("[OK] All applications are ready.", text)
+
     def test_stop_validates_identity_before_signalling(self) -> None:
         text = (ROOT / "deploy" / "stop_all.sh").read_text(encoding="utf-8")
 
