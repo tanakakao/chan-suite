@@ -192,6 +192,12 @@ $bochan = Get-ApplicationByName -Applications $configuration.Applications -Name 
 $malchan = Get-ApplicationByName -Applications $configuration.Applications -Name 'malchan'
 $cauchan = Get-ApplicationByName -Applications $configuration.Applications -Name 'cauchan'
 $dchan = Get-ApplicationByName -Applications $configuration.Applications -Name 'dchan'
+$portalUrl = if ($null -eq $portal) {
+    $null
+}
+else {
+    Get-ChanSuiteUrl -PublicHost $resolvedProfile.PublicHost -Port $portal.frontendPort
+}
 
 try {
     if ($null -ne $portal) {
@@ -212,6 +218,9 @@ try {
 
         $frontendEnvironment = Copy-Environment -Environment $backendEnvironment
         $frontendEnvironment['VITE_API_BASE'] = '/api/v1'
+        if ($null -ne $portalUrl) {
+            $frontendEnvironment['VITE_PORTAL_URL'] = $portalUrl
+        }
         Start-Frontend -Application $bochan -RelativePath 'web' -Environment $frontendEnvironment -PnpmPath $pnpmPath
     }
 
@@ -225,6 +234,9 @@ try {
 
         $frontendEnvironment = Copy-Environment -Environment $backendEnvironment
         $frontendEnvironment['VITE_API_BASE'] = "http://$($resolvedProfile.PublicHost):$($malchan.backendPort)/api"
+        if ($null -ne $portalUrl) {
+            $frontendEnvironment['VITE_PORTAL_URL'] = $portalUrl
+        }
         Start-Frontend -Application $malchan -RelativePath 'frontend' -Environment $frontendEnvironment -PnpmPath $pnpmPath
     }
 
@@ -238,6 +250,9 @@ try {
 
         $frontendEnvironment = Copy-Environment -Environment $backendEnvironment
         $frontendEnvironment['VITE_API_BASE_URL'] = "http://$($resolvedProfile.PublicHost):$($cauchan.backendPort)/api/v1"
+        if ($null -ne $portalUrl) {
+            $frontendEnvironment['VITE_PORTAL_URL'] = $portalUrl
+        }
         Start-Frontend -Application $cauchan -RelativePath 'web' -Environment $frontendEnvironment -PnpmPath $pnpmPath
     }
 
@@ -251,6 +266,9 @@ try {
 
         $frontendEnvironment = Copy-Environment -Environment $backendEnvironment
         $frontendEnvironment['VITE_API_URL'] = "http://$($resolvedProfile.PublicHost):$($dchan.backendPort)"
+        if ($null -ne $portalUrl) {
+            $frontendEnvironment['VITE_PORTAL_URL'] = $portalUrl
+        }
         Start-Frontend -Application $dchan -RelativePath 'frontend' -Environment $frontendEnvironment -PnpmPath $pnpmPath
     }
 }
